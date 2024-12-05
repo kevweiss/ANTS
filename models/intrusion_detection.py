@@ -1,4 +1,4 @@
-# Import necessary libraries
+import os
 import pandas as pd
 import numpy as np
 from sklearn.preprocessing import LabelEncoder, MinMaxScaler
@@ -10,36 +10,52 @@ from sklearn.metrics import classification_report, accuracy_score
 from scipy.stats import mode
 import joblib
 
-# Load the NSL-KDD dataset
-def load_data(train_file, test_file, columns):
-    train_data = pd.read_csv(train_file, names=columns)
-    test_data = pd.read_csv(test_file, names=columns)
+# Get the current working directory (repo root)
+repo_root = os.path.dirname(os.path.abspath(__file__))
 
-    # One-hot encode categorical features
-    categorical_features = ['protocol_type', 'service', 'flag']
-    train_data = pd.get_dummies(train_data, columns=categorical_features)
-    test_data = pd.get_dummies(test_data, columns=categorical_features)
+# Define the folder containing the data
+data_folder = os.path.join(repo_root, 'data')
 
-    # Align test dataset to training columns
-    test_data = test_data.reindex(columns=train_data.columns, fill_value=0)
-
-    # Encode labels
+# Function to load dataset files dynamically
+def load_data(data_folder):
+    # List of files to load
+    filenames = [
+        'Friday-WorkingHours-Afternoon-DDos.pcap_ISCX.csv',
+        'Friday-WorkingHours-Afternoon-PortScan.pcap_ISCX.csv',
+        'Friday-WorkingHours-Morning.pcap_ISCX.csv',
+        'Monday-WorkingHours.pcap_ISCX.csv',
+        'Thursday-WorkingHours-Afternoon-Infilteration.pcap_ISCX.csv',
+        'Thursday-WorkingHours-Morning-WebAttacks.pcap_ISCX.csv',
+        'Tuesday-WorkingHours.pcap_ISCX.csv',
+        'Wednesday-workingHours.pcap_ISCX.csv'
+    ]
+    
+    # Load all datasets and concatenate them into one DataFrame
+    data_frames = []
+    for file in filenames:
+        file_path = os.path.join(data_folder, file)
+        data = pd.read_csv(file_path)
+        data_frames.append(data)
+    
+    # Concatenate all data into one DataFrame
+    full_data = pd.concat(data_frames, ignore_index=True)
+    
+    # Label encoding the 'Label' column (normal vs attack)
     label_encoder = LabelEncoder()
-    train_data['label'] = label_encoder.fit_transform(train_data['label'])
-    test_data['label'] = label_encoder.transform(test_data['label'])
+    full_data['Label'] = label_encoder.fit_transform(full_data['Label'])
 
     # Separate features and labels
-    X_train = train_data.drop('label', axis=1)
-    y_train = train_data['label']
-    X_test = test_data.drop('label', axis=1)
-    y_test = test_data['label']
+    X = full_data.drop('Label', axis=1)
+    y = full_data['Label']
 
     # Normalize features
     scaler = MinMaxScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
+    X = scaler.fit_transform(X)
 
-    return X_train, y_train, X_test, y_test
+    return X, y
+
+# Load data
+X, y = load_data(data_folder)
 
 # Train Random Forest Model
 def train_rf(X_train, y_train):
@@ -88,11 +104,9 @@ def save_models(models):
 
 # Main function to execute the steps
 def main():
-    # Define column names for the NSL-KDD dataset
-    columns = [...]  # Fill with the actual columns based on the dataset documentation
-    
-    # Load data
-    X_train, y_train, X_test, y_test = load_data('KDDTrain+.csv', 'KDDTest+.csv', columns)
+    # Split the data into training and testing (70/30 split)
+    from sklearn.model_selection import train_test_split
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
     
     # Train models
     rf_clf = train_rf(X_train, y_train)
